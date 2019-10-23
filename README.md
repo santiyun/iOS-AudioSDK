@@ -1,3 +1,10 @@
+## 纯音频SDK
+
+纯音频SDK使用需要同时下载依赖库[TTTPlayerKit.framework](https://github.com/santiyun/TTTPlayerKit_iOS)
+
+更新纯音频SDK时不需要更新**TTTPlayerKit.framework**
+
+
 ## 2.3.0
 
 
