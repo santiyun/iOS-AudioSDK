@@ -5,6 +5,22 @@
 更新纯音频SDK时不需要更新**TTTPlayerKit.framework**
 
 
+## 2.4.0
+
+#### 新增方法
+
+1. 增加**stopAudioPlayAndRecord**停止/恢复音频采集和播放
+2. 增加**setRecordingAudioFrameParametersWithSampleRate**设置录制的声音格式
+3. 增加**setPlaybackAudioFrameParametersWithSampleRate**设置播放的声音格式
+4. 增加**setMixedAudioFrameParametersWithSampleRate**设置录制和播放声音混音后的数据格式
+5. 增加**sendAudioLyric**发送歌词
+
+#### 新增回调
+
+1. **receiveAudioLyricOfUid** 接收远端用户发来的歌词
+2. **mixAudioData** 混音音频数据回调
+
+
 ## 2.3.0
 
 

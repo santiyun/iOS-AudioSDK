@@ -80,12 +80,21 @@ typedef NS_ENUM(NSUInteger, TTTRtcUserOfflineReason) {
 /**
  *  音频输出路由
  */
+#if TARGET_OS_IOS
 typedef NS_ENUM(NSUInteger, TTTRtcAudioOutputRouting)
 {
-    TTTRtc_AudioOutput_Headset   = 0, //耳机或蓝牙
-    TTTRtc_AudioOutput_Speaker   = 1, //扬声器
-    TTTRtc_AudioOutput_Headphone = 2  //手机听筒
+    TTTRtc_AudioOutput_Headset   = 0, // 耳机或蓝牙
+    TTTRtc_AudioOutput_Speaker   = 1, // 扬声器
+    TTTRtc_AudioOutput_Headphone = 2  // 手机听筒
 };
+#elif TARGET_OS_OSX
+typedef NS_ENUM(NSUInteger, TTTRtcAudioOutputRouting)
+{
+    TTTRtc_AudioOutput_InternalSpeaker = 0, // 内置扬声器
+    TTTRtc_AudioOutput_ExternalSpeaker = 1, // 外置扬声器
+    TTTRtc_AudioOutput_Headphones      = 2  // 耳机
+};
+#endif
 
 /**
  *  日志过滤器
@@ -164,6 +173,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 @property (assign, nonatomic) NSUInteger sentBitrate;     // 发送的码率(kbps)
 @property (assign, nonatomic) NSUInteger receivedBitrate; // 接收的码率(kbps)
 @property (assign, nonatomic) NSUInteger captureDataSize; // push数据量
+@property (assign, nonatomic) CGFloat sentLossRate;       // 发送的丢包率
 
 @end
 
@@ -174,9 +184,9 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 @property (assign, nonatomic) int64_t uid;
 @property (assign, nonatomic) NSUInteger receivedBitrate;   // 接收码率
-@property (assign, nonatomic) NSUInteger loseRate;          // 丢包率
+@property (assign, nonatomic) CGFloat loseRate;             // 丢包率
 @property (assign, nonatomic) NSUInteger bufferDuration;    // 缓存时长
-@property (assign, nonatomic) NSUInteger delay;
+@property (assign, nonatomic) NSUInteger delay;             // 延迟
 @property (assign, nonatomic) NSUInteger audioCodec;
 
 @end
@@ -266,12 +276,7 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
 /**
  *  音频采集设备
  */
-@property (nonatomic, weak) AVCaptureDevice *audioCaptureDevice;
-
-/**
- *  视频采集设备
- */
-@property (nonatomic, weak) AVCaptureDevice *videoCaptureDevice;
+@property (nonatomic, weak) TTTRtcAudioDevice *audioCaptureDevice;
 
 /**
  *  音频输出设备
@@ -415,7 +420,7 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
 - (int)muteRemoteSpeaking:(int64_t)uid mute:(BOOL)mute;
 
 /*
- * 启用/禁用回声消除
+ * 启用/禁用硬件回声消除
  * 加入房间之后调用
  *
  * @param enable 是否启用
@@ -423,6 +428,15 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
  * @return 0: 方法调用成功，<0: 方法调用失败。
  */
 - (int)enableHWAEC:(BOOL)enable;
+
+/*
+ * 启用/禁用软件回声消除
+ *
+ * @param enable 是否启用
+ *
+ * @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)enableSoftAEC:(BOOL)enable;
 
 /**
  *  打开/关闭耳返功能，在插入耳机的情况下有效
@@ -441,6 +455,13 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
  *  @return 0: 方法调用成功，<0: 方法调用失败。
  */
 - (int)setAudioEarBackVolume:(NSUInteger)volume;
+
+/**
+ *  是否打开耳返
+ *
+ *  @return YES: 耳返是打开状态，NO: 耳返是关闭状态。
+ */
+- (BOOL)isAudioEarBackEnabled;
 
 /**
  *  启用/关闭本地音频和远端音频数据回调
@@ -758,6 +779,58 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
  */
 - (int)pullRenderingAudioFrame:(int8_t *)data length:(int)len;
 
+/**
+ *  停止/恢复音频采集和播放
+ *
+ *  @param stop  YES: 停止采集和播放  NO: 恢复采集和播放
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)stopAudioPlayAndRecord:(BOOL)stop;
+
+/**
+ *  设置录制的声音格式
+ *
+ *  @param sampleRate     采样率，建议设置为AVAudioSession.sharedInstance.sampleRate
+ *  @param channel        声道数，可设置：1或2
+ *  @param samplesPerCall 采样点数，建议设置：1024或2048
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)setRecordingAudioFrameParametersWithSampleRate:(NSInteger)sampleRate channel:(NSInteger)channel samplesPerCall:(NSInteger)samplesPerCall;
+
+/**
+ *  设置播放的声音格式
+ *
+ *  @param sampleRate     采样率，建议设置为AVAudioSession.sharedInstance.sampleRate
+ *  @param channel        声道数，可设置：1或2
+ *  @param samplesPerCall 采样点数，建议设置：1024或2048
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)setPlaybackAudioFrameParametersWithSampleRate:(NSInteger)sampleRate channel:(NSInteger)channel samplesPerCall:(NSInteger)samplesPerCall;
+
+/**
+ *  设置录制和播放声音混音后的数据格式
+ *  回调数据包含本地和所有远端用户混音数据
+ *
+ *  @param sampleRate     采样率
+ *  @param channel        声道数，可设置：1或2
+ *  @param samplesPerCall 采样点数，建议设置：1024或2048
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)setMixedAudioFrameParametersWithSampleRate:(NSInteger)sampleRate channel:(NSInteger)channel samplesPerCall:(NSInteger)samplesPerCall;
+
+/**
+*  发送歌词
+*
+*  @param lyric 歌词内容
+*
+*  @return 0: 方法调用成功，<0: 方法调用失败。
+*/
+- (int)sendAudioLyric:(NSString *)lyric;
+
 
 @end
 
@@ -944,6 +1017,17 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
 - (void)rtcEngine:(TTTRtcEngineKit *)engine remoteAudioData:(char *)data dataSize:(NSUInteger)size sampleRate:(NSUInteger)sampleRate channels:(NSUInteger)channels;
 
 /**
+ *  混音音频数据回调
+ *  通过"setMixedAudioFrameParametersWithSampleRate"启用
+ *
+ *  @param data        音频数据
+ *  @param size        数据长度
+ *  @param sampleRate  采样率
+ *  @param channels    声道数
+ */
+- (void)rtcEngine:(TTTRtcEngineKit *)engine mixAudioData:(char *)data dataSize:(NSUInteger)size sampleRate:(NSUInteger)sampleRate channels:(NSUInteger)channels;
+
+/**
  *  伴奏播放开始的回调
  */
 - (void)rtcEngineAudioMixingDidStart:(TTTRtcEngineKit *)engine;
@@ -1019,4 +1103,11 @@ typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
  */
 - (void)rtcEngine:(TTTRtcEngineKit *)engine pullAudioData:(char *)data size:(int)size sampleRate:(NSUInteger)sampleRate channels:(int)channels;
 
+/**
+*  接收远端用户发来的歌词
+*
+*  @param uid   用户id
+*  @param lyric 歌词内容
+*/
+- (void)rtcEngine:(TTTRtcEngineKit *)engine receiveAudioLyricOfUid:(int64_t)uid lyric:(NSString *)lyric;
 @end
