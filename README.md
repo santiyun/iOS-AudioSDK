@@ -4,6 +4,18 @@
 
 更新纯音频SDK时不需要更新**TTTPlayerKit.framework**
 
+## 2.5.0
+
+#### 新增
+
+1. 增加**adjustPlaybackSignalVolume:**调节播放人声的音量
+2. 增加**muteRemoteRtmpAudioStream**停止/恢复远端用户音频混流到rtmp
+
+#### 修改
+
+1. **TTTRtcLocalAudioStats**增加**rtt**属性
+2. **TTTRtcRemoteAudioStats**增加**rtt**属性
+3. 网络传输优化
 
 ## 2.4.0
 
