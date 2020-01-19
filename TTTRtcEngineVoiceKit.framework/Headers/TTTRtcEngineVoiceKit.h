@@ -1,329 +1,25 @@
 #import <Foundation/Foundation.h>
-#import <AVFoundation/AVFoundation.h>
-#if TARGET_OS_IOS
-#import <UIKit/UIKit.h>
-#elif TARGET_OS_OSX
-#import <AppKit/AppKit.h>
-#endif
-
-/** Error codes */
-typedef NS_ENUM(NSUInteger, TTTRtcErrorCode) {
-    /** 0: 没有错误， 接口调用成功 */
-    TTTRtc_Error_NoError             = 0,
-    /** 9000: 无效的房间名称。 使用可转换大于0的long long类型纯数字字符串 */
-    TTTRtc_Error_InvalidChannelName  = 9000,
-    /** 9001: 进入房间超时，10s未连接上服务器，说明网络比较差。不处理该回调参数, 我们会继续尝试连接服务器。
-    停止这次进入房间操作，调用“leaveChannel”退出房间。 */
-    TTTRtc_Error_Enter_TimeOut       = 9001,
-    /** 9002: 无法连接服务器 */
-    TTTRtc_Error_Enter_Failed        = 9002,
-    /** 9003: 验证码错误，可忽略 */
-    TTTRtc_Error_Enter_VerifyFailed  = 9003,
-    /** 9004: 版本错误 */
-    TTTRtc_Error_Enter_BadVersion    = 9004,
-    /** 9005: 未知错误， 其它错误 */
-    TTTRtc_Error_Enter_Unknown       = 9005,
-    /** 9006: 直播模式"TTTRtc_ChannelProfile_LiveBroadcasting"，房间内没有主播 */
-    TTTRtc_Error_Enter_NoAnchor      = 9006,
-    /** 9101: 需要上行音频的场景，超过40s没有上行音频数据，可不处理 */
-    TTTRtc_Error_NoAudioData         = 9101,
-    /** 9111: 在有接收音频的场景，超过40s没有下行音频数据，可不处理。*/
-    TTTRtc_Error_NoReceivedAudioData = 9111,
-    /** 9200: 在加入房间做channelKey(token)验证, 传入的channelKey无效 */
-    TTTRtc_Error_InvalidChannelKey   = 9200,
-    /** 9999: 未知错误 */
-    TTTRtc_Error_Unknown             = 9999,
-};
-
-/** 踢出房间原因 */
-typedef NS_ENUM(NSUInteger, TTTRtcKickedOutReason) {
-    /** 1: 直播模式, 主播通过"kickChannelUser:"把用户踢出房间 */
-    TTTRtc_KickedOut_KickedByHost      = 1,
-    /** 2: rtmp推流失败 */
-    TTTRtc_KickedOut_PushRtmpFailed    = 2,
-    /** 3: 服务器过载 */
-    TTTRtc_KickedOut_ServerOverload    = 3,
-    /** 4: 直播模式下，主播退出房间后，房间被销毁，其它用户收到该回调参数 */
-    TTTRtc_KickedOut_MasterExit        = 4,
-    /** 5: 同一AppId下，使用相同的用户id登录，前者会被踢出房间 */
-    TTTRtc_KickedOut_ReLogin           = 5,
-    /** 6: 长时间没有上行音频数据 */
-    TTTRtc_KickedOut_NoAudioData       = 6,
-    /** 7: 长时间没有上行视频数据 */
-    TTTRtc_KickedOut_NoVideoData       = 7,
-    /** 8: 直播模式下，主播在直播的情况下，其他人以主播身份加入相同房间，房间内其他用户会被踢出房间 */
-    TTTRtc_KickedOut_NewChairEnter     = 8,
-    /** 9: channelKey(token)到期 */
-    TTTRtc_KickedOut_ChannelKeyExpired = 9,
-};
-
-/** 频道模式 */
-typedef NS_ENUM(NSUInteger, TTTRtcChannelProfile) {
-    /** 通信模式(默认值)，一对一自由通话，单用户在房间内不上行视频 */
-    TTTRtc_ChannelProfile_Communication    = 0,
-    /** 直播模式，主播先创建房间，房间内可以有一个主播，多个副播和多个观众。
-     主播和副播可发送和接收音视频，观众只能接收音视频 */
-    TTTRtc_ChannelProfile_LiveBroadcasting = 1,
-    /** 游戏模式，主要针对游戏场景 */
-    TTTRtc_ChannelProfile_Game_FreeMode    = 2,
-};
-
-/** 用户角色 */
-typedef NS_ENUM(NSUInteger, TTTRtcClientRole) {
-    /** 主播：仅在直播模式下使用，且不能切换其它角色 */
-    TTTRtc_ClientRole_Anchor      = 1,
-    /** 副播：可在任何模式下使用，可切换为观众 */
-    TTTRtc_ClientRole_Broadcaster = 2,
-    /** 观众(默认)：可在任何模式下使用，可切换为副播。默认对其它用户是不可见的 */
-    TTTRtc_ClientRole_Audience    = 3,
-};
-
-/** 音频编码格式 */
-typedef NS_ENUM(NSUInteger, TTTRtcAudioCodecType) {
-    /** AAC：码率范围32kbps~96kbps */
-    TTTRtc_AudioCodec_AAC     = 1,
-    /** ISAC_WB：码率范围10kbps~32kbps (默认32kbps)*/
-    TTTRtc_AudioCodec_ISAC_WB = 2,
-    /** OPUS：码率范围32kbps~96kbps */
-    TTTRtc_AudioCodec_OPUS    = 4,
-};
-
-/** 远端用户离线原因 */
-typedef NS_ENUM(NSUInteger, TTTRtcUserOfflineReason) {
-    /** 1: 用户调用"leaveChannel:"主动退出房间 */
-    TTTRtc_UserOffline_Quit           = 1,
-    /** 2: 因过长时间收不到对方数据包，超时掉线 */
-    TTTRtc_UserOffline_Dropped        = 2,
-    /** 3: 用户身份从副播切换为观众 */
-    TTTRtc_UserOffline_BecomeAudience = 3,
-};
-
-#if TARGET_OS_IOS
-/** 音频输出路由 */
-typedef NS_ENUM(NSUInteger, TTTRtcAudioOutputRouting)
-{
-    /** 耳机或蓝牙 */
-    TTTRtc_AudioOutput_Headset   = 0,
-    /** 扬声器 */
-    TTTRtc_AudioOutput_Speaker   = 1,
-    /** 手机听筒 */
-    TTTRtc_AudioOutput_Headphone = 2
-};
-#elif TARGET_OS_OSX
-/** 音频输出路由 */
-typedef NS_ENUM(NSUInteger, TTTRtcAudioOutputRouting)
-{
-    TTTRtc_AudioOutput_InternalSpeaker = 0, // 内置扬声器
-    TTTRtc_AudioOutput_ExternalSpeaker = 1, // 外置扬声器
-    TTTRtc_AudioOutput_Headphones      = 2  // 耳机
-};
-
-/**
- *  音频设备类型
- */
-typedef NS_ENUM(NSUInteger, TTTRtcAudioDeviceType) {
-    TTTRtc_AudioDevice_Input_InternalMicrophone = 1,  // 内置麦克风
-    TTTRtc_AudioDevice_Input_ExternalMicrophone = 2,  // 外置麦克风
-    TTTRtc_AudioDevice_Output_InternalSpeaker   = 11, // 内置扬声器
-    TTTRtc_AudioDevice_Output_ExternalSpeaker   = 12, // 外置扬声器
-    TTTRtc_AudioDevice_Output_Headphones        = 13, // 耳机
-};
-#endif
-
-/**  日志过滤器 */
-typedef NS_ENUM(NSUInteger, TTTRtcLogFilter) {
-    /** 不输出任何日志，默认值 */
-    TTTRtc_LogFilter_Off      = 0,
-    /** 输出所有类型日志 */
-    TTTRtc_LogFilter_Debug    = 0x080f,
-    /** 输出Info, Warning, Error 和 Critical 类型的日志 */
-    TTTRtc_LogFilter_Info     = 0x000f,
-    /** 输出Warning, Error 和 Critical 类型的日志 */
-    TTTRtc_LogFilter_Warning  = 0x000e,
-    /** 输出Error 和 Critical 类型的日志 */
-    TTTRtc_LogFilter_Error    = 0x000c,
-    /** 输出 Critical 类型的日志 */
-    TTTRtc_LogFilter_Critical = 0x0008
-};
-
-/** 聊天消息类型 */
-typedef NS_ENUM(NSUInteger, TTTRtcChatType) {
-    /** 文本 */
-    TTTRtc_ChatType_Text    = 1,
-    /** 图片 */
-    TTTRtc_ChatType_Picture = 2,
-    /** 短语音 */
-    TTTRtc_ChatType_Audio   = 3,
-    /** 自定义类型 */
-    TTTRtc_ChatType_Custom  = 4
-};
-
-/**
- *  网络质量
- */
-typedef NS_ENUM(NSUInteger, TTTNetworkQuality) {
-    TTTNetworkQualityExcellent = 1,
-    TTTNetworkQualityGood      = 2,
-    TTTNetworkQualityCommon    = 3,
-    TTTNetworkQualityPoor      = 4,
-    TTTNetworkQualityBad       = 5,
-    TTTNetworkQualityDown      = 6,
-};
-
-/** 网络连接状态 */
-typedef NS_ENUM(NSUInteger, TTTConnectionState) {
-    /** 未加入房间，加入房间失败后，或者离开房间之后 */
-    TTTConnectionStateDisconnected = 1,
-    /** 加入房间正在建立网络连接 */
-    TTTConnectionStateConnecting = 2,
-    /** 网络连接建立成功 */
-    TTTConnectionStateConnected = 3,
-    /** 网络连接重连中 */
-    TTTConnectionStateReconnecting = 4,
-    /** 网络连接失败 */
-    TTTConnectionStateFailed = 5,
-};
-
-/**  录音音质 */
-typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
-    /** 10 分钟的文件大小为 2.4M 左右 */
-    TTTAudioRecordQualityLow = 0,
-    /** 10 分钟的文件大小为 3.6M 左右 */
-    TTTAudioRecordQualityMedium = 1,
-    /** 10 分钟的文件大小为 4.8M 左右 */
-    TTTAudioRecordQualityHigh = 2,
-};
-
-/** 通话相关的统计信息 */
-@interface TTTRtcStats : NSObject
-/** 通话时长，单位为秒，累计值 */
-@property (assign, nonatomic) NSUInteger duration;
-/** 发送字节数，累计值 */
-@property (assign, nonatomic) NSUInteger txBytes;
-/** 接收字节数，累计值 */
-@property (assign, nonatomic) NSUInteger rxBytes;
-/** 音频发送码率 (kbps)，瞬时值 */
-@property (assign, nonatomic) NSUInteger txAudioKBitrate;
-/** 音频接收码率 (kbps)，瞬时值 */
-@property (assign, nonatomic) NSUInteger rxAudioKBitrate;
-/** 房间内的瞬时人数 */
-@property (assign, nonatomic) NSUInteger users;
-
-@end
-
-/** 本地音频统计信息 */
-@interface TTTRtcLocalAudioStats : NSObject
-/** 编码的码率(kbps) */
-@property (assign, nonatomic) NSUInteger encodedBitrate;
-/** 发送的码率(kbps) */
-@property (assign, nonatomic) NSUInteger sentBitrate;
-/** 接收的码率(kbps) */
-@property (assign, nonatomic) NSUInteger receivedBitrate;
-/** 音频采集数据长度(Byte) */
-@property (assign, nonatomic) NSUInteger captureDataSize;
-/** 发送的丢包率 */
-@property (assign, nonatomic) CGFloat sentLossRate;
-/** rtt */
-@property (assign, nonatomic) NSUInteger rtt;
-
-@end
-
-/**  远端音频统计信息 */
-@interface TTTRtcRemoteAudioStats : NSObject
-/** 用户id */
-@property (assign, nonatomic) int64_t uid;
-/** 接收码率(kbps) */
-@property (assign, nonatomic) NSUInteger receivedBitrate;
-/** 丢包率 */
-@property (assign, nonatomic) CGFloat loseRate;
-/** 缓存时长(ms) */
-@property (assign, nonatomic) NSUInteger bufferDuration;
-/** 延迟(ms) */
-@property (assign, nonatomic) NSUInteger delay;
-/** 音频编码类型 */
-@property (assign, nonatomic) NSUInteger audioCodec;
-/** rtt */
-@property (assign, nonatomic) NSUInteger rtt;
-
-@end
-
-/** 直播推流配置 */
-@interface TTTPublisherConfiguration : NSObject
-/** 旁路直播输出码流的码率。默认设置为 500 Kbps */
-@property (assign, nonatomic) NSInteger bitrate;
-/** 合图推流地址 */
-@property (copy, nonatomic) NSString *publishUrl;
-/** 推送纯音频流 */
-@property (assign, nonatomic) BOOL isPureAudio;
-
-@end
-
-/** 直播推流配置生成器 */
-@interface TTTPublisherConfigurationBuilder : NSObject
-
-- (TTTPublisherConfigurationBuilder *)setBitrate:(NSInteger)bitrate;
-- (TTTPublisherConfigurationBuilder *)setPublisherUrl:(NSString *)url;
-- (TTTPublisherConfigurationBuilder *)setPublishPureAudio:(BOOL)isPureAudio;
-- (TTTPublisherConfiguration *)build;
-
-@end
-
-/** 聊天信息 */
-@interface TTTRtcChatInfo : NSObject
-/** 聊天类型 */
-@property (assign, nonatomic) TTTRtcChatType chatType;
-/** 唯一标识 */
-@property (copy, nonatomic) NSString *seqID;
-/** 聊天内容 */
-@property (copy, nonatomic) NSString *chatData;
-/** 音频时长（单位“秒”，chatType为“Audio”） */
-@property (assign, nonatomic) NSUInteger audioDuration;
-
-@end
-
-#if TARGET_OS_OSX
-/**
- *  音频设备
- */
-@interface TTTRtcAudioDevice : NSObject
-
-@property (assign, nonatomic) AudioDeviceID deviceID;           // 音频设备ID
-@property (assign, nonatomic) TTTRtcAudioDeviceType deviceType; // 音频设备类型
-@property (copy, nonatomic) NSString *deviceName;               // 音频设备名称
-
-@end
-
-#endif
+#import "TTTVoiceEnumerates.h"
+#import "TTTVoiceObjects.h"
 
 @protocol TTTRtcEngineDelegate;
-
 @interface TTTRtcEngineKit : NSObject
 
-/**
- *  应用ID，由连麦平台分配，用于区分不同的客户和应用。
- */
+/** 应用ID，由连麦平台分配，用于区分不同的客户和应用 */
 @property (nonatomic, copy) NSString *appID;
 
-/**
- *  SDK回调对象，由调用方赋值。
- */
+/**  SDK回调对象，由调用方赋值 */
 @property (nonatomic, weak) id<TTTRtcEngineDelegate> delegate;
 
-/**
- *  音视频信息统计间隔（默认：2秒）
- */
+/** 音视频信息统计间隔（默认：2秒） */
 @property (nonatomic, assign) NSUInteger statsInterval;
 
 #if TARGET_OS_OSX
 
-/**
- *  音频采集设备
- */
+/** 音频采集设备 */
 @property (nonatomic, weak) TTTRtcAudioDevice *audioCaptureDevice;
 
-/**
- *  音频输出设备
- */
+/** 音频输出设备 */
 @property (nonatomic, weak) TTTRtcAudioDevice *audioPlayoutDevice;
 
 #endif
@@ -335,14 +31,9 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
     可以通过([TTTRtcEngineKit.appID])设置新的appID
  *
  *  @param delegate     SDK回调代理, 可以通过([TTTRtcEngineKit.delegate])设置新的代理
- *  @param enableChat   打开发送聊天功能
- *  @param enableSignal 打开发送信令功能
  *
  *  @return TTTRtc 对象(单例)
  */
-+ (instancetype)sharedEngineWithAppId:(NSString *)appId delegate:(id<TTTRtcEngineDelegate>)delegate
-                           enableChat:(BOOL)enableChat enableSignal:(BOOL)enableSignal;
-
 + (instancetype)sharedEngineWithAppId:(NSString *)appId delegate:(id<TTTRtcEngineDelegate>)delegate;
 
 /**
@@ -377,7 +68,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
  *  设置或切换用户角色
  *  加入房间前要确定用户角色，在加入房间的过程中不能修改角色。
  *  加入房间成功之后，副播和观众可以相互切换，角色切换成功之后才能进行下一次切换，切换角色成功的回调 ([TTTRtcEngineDelegate rtcEngine:didClientRoleChangedOfUid:role:])。
- *  切换角色SDK会对用户的音视频权限做对应调整，不需要调用额外接口
+ *  切换角色SDK会对用户的音频权限做对应调整，不需要调用额外接口
  *
  *  @param role          直播场景里的用户角色
  *
@@ -427,7 +118,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  *  静音/取消静音
- *  允许/禁止往网络发送本地音频流
+ *  允许/禁止往网络发送本地音频流。
  *
  *  @param mute YES: 麦克风静音, NO: 取消静音。
  *
@@ -442,15 +133,15 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
  *
  *  @return 0: 方法调用成功，<0: 方法调用失败。
  */
-- (int)adjustAudioMixingSoloVolume:(NSInteger)scale;
+- (int)adjustAudioMixingSoloVolume:(NSInteger)volume;
 
 /**
-*  调节播放人声的音量
-*
-*  @param volume 音量范围为0~500。默认100为原始音量
-*
-*  @return 0: 方法调用成功，<0: 方法调用失败。
-*/
+ *  调节播放人声的音量
+ *
+ *  @param volume 音量范围为0~500。默认100为原始音量
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
 - (int)adjustPlaybackSignalVolume:(NSInteger)volume;
 
 /**
@@ -475,6 +166,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  *  禁言指定远端用户/对指定远端用户取消禁言
+ *  仅直播模式下，主播具有该权限
  *
  *  @param mute YES: 禁止发言, NO: 允许发言。
  *
@@ -490,11 +182,11 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
  *  @param rtmpUrl rtmp推流地址, 推单路流可设置为nil
  *
  *  @return 0: 方法调用成功，<0: 方法调用失败。
-*/
+ */
 - (int)muteRemoteRtmpAudioStream:(int64_t)uid mute:(BOOL)mute rtmpUrl:(NSString *)rtmpUrl;
 
 /**
- * 启用/禁用硬件回声消除
+ * 启用/禁用回声消除
  * 加入房间之后调用，默认启用
  *
  * @param enable 是否启用
@@ -505,7 +197,6 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  * 启用/禁用软件回声消除
- * 针对于部分硬件消除不起作用的iPhone设备，默认不开启
  *
  * @param enable 是否启用
  *
@@ -646,7 +337,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  *  开始客户端本地混音
- *  默认支持本地、网络mp3格式音乐文件
+ *  默认仅支持mp3格式音乐文件
  *  对于播放通话开始或结束提示音，可以使用该接口，结束需要调用([TTTRtcEngineKit stopAudioMixing])
  *  播放开始([TTTRtcEngineDelegate rtcEngineAudioMixingDidStart:])
  *  播放结束([TTTRtcEngineDelegate rtcEngineAudioMixingDidFinish:])
@@ -755,27 +446,6 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 - (int)configPublisher:(TTTPublisherConfiguration *)config;
 
 /**
- *  发送聊天消息
- *
- *  @param userID   用户ID
- *  @param chatType 聊天消息类型
- *  @param seqID    唯一标识
- *  @param data     消息内容
- *
- *  @return 0: 方法调用成功，<0: 方法调用失败。
- */
-- (int)sendChatMessageWithUserID:(int64_t)userID chatType:(TTTRtcChatType)chatType seqID:(NSString *)seqID data:(NSString *)data;
-
-/**
- *  发送信令
- *
- *  @param userID 用户ID
- *  @param seqID  唯一标识
- *  @param data   信令内容
- */
-- (int)sendSignalWithUserID:(int64_t)userID seqID:(NSString *)seqID data:(NSString *)data;
-
-/**
  *  设置CDN推流音频参数
  *
  *  @param samplerate 采样率 8000 ,16000 ,24000, 32000 , 44100 ,48000
@@ -801,7 +471,6 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  *  开始客户端录音
- *  录音房间内所有用户的声音，建议在加入房间后开启
  *
  *  @param filePath 录音文件的本地保存路径: xxx/.../xxx.aac
  *  @param quality  录音质量
@@ -919,7 +588,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 
 /**
  *  发生错误回调
- *  SDK上报的错误意味着SDK无法自动恢复，需要应用程序干预或提示用户。
+ *  通常情况下，SDK上报的错误意味着SDK无法自动恢复，需要应用程序干预或提示用户。
  *
  *  @param errorCode 错误代码
  */
@@ -961,10 +630,11 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
  *  @param uid     用户ID
  *  @param elapsed 从joinChannel开始到该事件产生的延迟（毫秒）
  */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine didJoinChannel:(NSString*)channel withUid:(int64_t)uid elapsed:(NSInteger) elapsed;
+- (void)rtcEngine:(TTTRtcEngineKit *)engine didJoinChannel:(NSString*)channel withUid:(int64_t)uid elapsed:(NSInteger)elapsed;
 
 /**
  *  成功离开频道的回调
+ *  调用([TTTRtcEngineKit leaveChannel:])即认为离开房间，不需要等待回调
  *
  *  @param stats 统计数据
  */
@@ -1076,6 +746,7 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 - (void)rtcEngine:(TTTRtcEngineKit *)engine firstAudioFrameDecoded:(int64_t)uid;
 
 
+
 /**
  *  本端音频采集数据回调
  *
@@ -1122,39 +793,6 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
  */
 - (void)rtcEngineDidAudioEffectFinish:(TTTRtcEngineKit *)engine soundId:(NSInteger)soundId;
 
-/**
- *  发送聊天消息的回调
- *
- *  @param chatInfo  聊天信息
- *  @param errorCode 错误代码
- */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine chatMessageSentOfChatInfo:(TTTRtcChatInfo *)chatInfo errorCode:(TTTRtcErrorCode)errorCode;
-
-/**
- *  收到聊天消息的回调
- *
- *  @param userID   用户ID
- *  @param chatInfo 聊天信息
- */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine chatMessageReceivedOfUserID:(int64_t)userID chatInfo:(TTTRtcChatInfo *)chatInfo;
-
-/**
- *  发送信令的回调
- *
- *  @param seqID     唯一标识
- *  @param errorCode 错误代码
- */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine signalSentOfSeqID:(NSString *)seqID data:(NSString *)data errorCode:(TTTRtcErrorCode)errorCode;
-
-/**
- *  收到信令的回调
- *
- *  @param userID 用户ID
- *  @param seqID  唯一标识
- *  @param data   信令内容
- */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine signalReceivedOfUserID:(int64_t)userID seqID:(NSString *)seqID data:(NSString *)data;
-
 - (void)rtcEngineOnMediaSending:(TTTRtcEngineKit *)engine;
 
 /**
@@ -1167,9 +805,11 @@ typedef NS_ENUM(NSUInteger, TTTAudioRecordQuality) {
 - (void)rtcEngine:(TTTRtcEngineKit *)engine lastmileQuality:(TTTNetworkQuality)quality;
 
 /**
- * channelKey即将过期
- * 时间距即将过期10~60s, 取channelKe有效时间的1/6，大于60s按照60s计算
- * 收到回调时，可以([TTTRtcEngineKit renewChannelByKey:])更新新的channelKey
+ *  channelKey即将过期
+ *  时间距即将过期10~60s, 取channelKe有效时间的1/6，大于60s按照60s计算
+ *  收到回调时，可以([TTTRtcEngineKit renewChannelByKey:])更新新的channelKey
+ *
+ *  @param channelKey token
  */
 - (void)rtcEngine:(TTTRtcEngineKit *)engine channelKeyPrivilegeWillExpire:(NSString *)channelKey;
 
