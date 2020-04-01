@@ -559,12 +559,22 @@
 - (int)setMixedAudioFrameParametersWithSampleRate:(NSInteger)sampleRate channel:(NSInteger)channel samplesPerCall:(NSInteger)samplesPerCall;
 
 /**
-*  发送歌词
-*
-*  @param lyric 歌词内容
-*
-*  @return 0: 方法调用成功，<0: 方法调用失败。
-*/
+ *  启用默认音频播放
+ *  调用该功能，内部会播放默认静音数据
+ *
+ *  @param enable  是否启用默认播放
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
+- (int)enableDefaultAudioPaly:(BOOL)enable;
+
+/**
+ *  发送歌词
+ *
+ *  @param lyric 歌词内容
+ *
+ *  @return 0: 方法调用成功，<0: 方法调用失败。
+ */
 - (int)sendAudioLyric:(NSString *)lyric;
 
 @end
