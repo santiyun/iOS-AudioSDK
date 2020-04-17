@@ -156,11 +156,11 @@
  *  提示谁在说话及其音量，默认禁用。
  *  可通过([TTTRtcEngineKit enableAudioVolumeIndication:smooth:])方法设置。
  *
- *  @param userID              用户ID
+ *  @param uid                 用户ID
  *  @param audioLevel          非线性区间[0,9]
  *  @param audioLevelFullRange 线性区间[0,32768]
  */
-- (void)rtcEngine:(TTTRtcEngineKit *)engine reportAudioLevel:(int64_t)userID
+- (void)rtcEngine:(TTTRtcEngineKit *)engine reportAudioLevel:(int64_t)uid
        audioLevel:(NSUInteger)audioLevel audioLevelFullRange:(NSUInteger)audioLevelFullRange;
 
 /**
